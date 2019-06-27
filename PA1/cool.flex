@@ -1,4 +1,8 @@
 /*
+ *  63/63
+ */
+ 
+/*
  *  The scanner definition for COOL.
  */
 
@@ -13,6 +17,7 @@
  #include <stringtab.h> 
  #include <utilities.h> 
  #include <string>  
+ #include <cstring>  
  
  /* The compiler assumes these identifiers. */ 
  #define yylval cool_yylval 
@@ -54,9 +59,13 @@ int COMMENT_DEP=0;
 
 %Start COMMENT 
 %Start INLINE_COMMENT 
-%Start STRING   
+%Start STRING 
+%Start STRING_ERROR
 
 DARROW          =>  
+LE              <=
+ASSIGN          <- 
+  
 CLASS [Cc][Ll][Aa][Ss][Ss] 
 ELSE [Ee][Ll][Ss][Ee] 
 IF [Ii][Ff] 
@@ -74,11 +83,15 @@ OF [Oo][Ff]
 NEW [Nn][Ee][Ww] 
 ISVOID [Ii][Ss][Vv][Oo][Ii][Dd] 
 INTCONST [0-9]+ 
+STRCONST \"[^"\n]*\"
+BOOLCONST  t[Rr][Uu][Ee]|f[Aa][Ll][Ss][Ee]
 TYPEID [A-Z][A-Za-z0-9_]* 
 OBJECTID [a-z][a-zA-Z0-9_]* 
-ASSIGN  <- 
 NOT [Nn][Oo][Tt] 
-LE  <=  
+
+PARENSTAR "(*"
+STARPAREN "*)"
+HYPHEN --
 SYMBOLS [-%|^.,:;+*\/><}{)(@=~]+ 
 WHITESPACE [ \t\r\f\v]+  
 
@@ -88,17 +101,17 @@ WHITESPACE [ \t\r\f\v]+
  *  Nested comments   
  */  
  
-"(*" {   
+{PARENSTAR} {   
   COMMENT_DEP=1;   
   BEGIN COMMENT; 
 }  
 
-"--" {
+{HYPHEN} {
   BEGIN INLINE_COMMENT; 
 }  
 
-"*)" {   
-  cool_yylval.error_msg="Unmatched *)";   
+{STARPAREN} {   
+  yylval.error_msg="Unmatched *)";   
   return ERROR; 
 }  
 
@@ -106,28 +119,26 @@ WHITESPACE [ \t\r\f\v]+
 <COMMENT>\([^*\n]*  ; 
 <COMMENT>\*[^*)\n]*  ; 
 <COMMENT>\)  ;  
+<COMMENT>\n { curr_lineno++; }
 
 <COMMENT><<EOF>> {   
-  cool_yylval.error_msg="EOF in comment";   
+  yylval.error_msg="EOF in comment";  
+  BEGIN 0;
   return ERROR; 
 }  
 
-<COMMENT>"(*"  {   
+<COMMENT>{PARENSTAR}  {   
   COMMENT_DEP++; 
 }  
 
-<COMMENT>"*)"  {   
-  if (COMMENT_DEP>1) {     
-    COMMENT_DEP--;   
-  }   
-  else if (COMMENT_DEP==1) {     
-    BEGIN INITIAL;   
-  } 
+<COMMENT>{STARPAREN}  {   
+  COMMENT_DEP--;   
+  if (COMMENT_DEP==0) { BEGIN 0; } 
 }  
 
-<INLINE_COMMENT>"\n" {   
+<INLINE_COMMENT>\n {   
   curr_lineno++;   
-  BEGIN INITIAL; 
+  BEGIN 0; 
 }  
 
 <INLINE_COMMENT>[^\n]* ;   
@@ -137,7 +148,15 @@ WHITESPACE [ \t\r\f\v]+
  */  
  
  
-{DARROW}  { return (DARROW); }  
+{DARROW}    { return (DARROW); }  
+{LE}        { return (LE); } 
+{ASSIGN}    { return (ASSIGN); }  
+
+/*   
+ * Keywords are case-insensitive except for the values true and false,   
+ * which must begin with a lower-case letter.   
+ */   
+ 
 {CLASS}     { return (CLASS); } 
 {ELSE}      { return (ELSE); } 
 {FI}        { return (FI); } 
@@ -155,8 +174,6 @@ WHITESPACE [ \t\r\f\v]+
 {NEW}       { return (NEW); } 
 {ISVOID}    { return (ISVOID); } 
 {NOT}       { return (NOT); } 
-{LE}        { return (LE); } 
-{ASSIGN}    { return (ASSIGN); }  
 
 {INTCONST} {   
   cool_yylval.symbol=inttable.add_string(yytext);   
@@ -164,7 +181,7 @@ WHITESPACE [ \t\r\f\v]+
 }  
 
 {SYMBOLS} {   
-  return int(yytext[0]); 
+  return (int)yytext[0]; 
 }   
 
 {WHITESPACE} ;  
@@ -179,27 +196,21 @@ WHITESPACE [ \t\r\f\v]+
   return (OBJECTID); 
 }  
 
+{BOOLCONST} {
+  for (int i=0; yytext[i]; i++) {
+    yytext[i]=tolower(yytext[i]);
+  }
+  if (strcmp("true", yytext)==0) { cool_yylval.boolean=true; }
+  else { cool_yylval.boolean=false; }
+  return BOOL_CONST;
+}
+
 . {   
   cool_yylval.error_msg=yytext;   
   return ERROR; 
 }  
 
-"\n" {  curr_lineno++; }    
-
-/*   
- * Keywords are case-insensitive except for the values true and false,   
- * which must begin with a lower-case letter.   
- */   
- 
-true {   
-  cool_yylval.boolean=1;   
-  return BOOL_CONST; 
-}  
-
-false {   
-  cool_yylval.boolean=0;   
-  return BOOL_CONST; 
-}   
+\n { curr_lineno++; }    
 
 /*   
  *  String constants (C syntax)   
@@ -208,10 +219,13 @@ false {
  *   
  */  
  
-<INITIAL>\" {   BEGIN STRING; }  
+\" { 
+  string_buf_ptr=string_buf;
+  BEGIN STRING; 
+}  
 
 <STRING>\" {   
-  BEGIN INITIAL;   
+  BEGIN 0;   
   *string_buf_ptr='\0';   
   if (string_buf_ptr >= string_buf + MAX_STR_CONST) {     
     cool_yylval.error_msg="String constant too long";     
@@ -227,31 +241,33 @@ false {
 <STRING>\\t { *string_buf_ptr++ = '\t';} 
 <STRING>\\n { *string_buf_ptr++ = '\n';} 
 <STRING>\\f { *string_buf_ptr++ = '\f';}  
-
+<STRING>\\\0 { BEGIN STRING_ERROR;}
+<STRING>\\(.|\n) { *string_buf_ptr++ = yytext[1]; }
 <STRING>[^"\\\0\n]* {   
   if (string_buf_ptr + sizeof(char)*strlen(yytext)<string_buf + MAX_STR_CONST) {     
     strcpy(string_buf_ptr,yytext);   
-  }   ]
+  }   
   string_buf_ptr+=sizeof(char)*strlen(yytext); 
 }  
 
-<STRING>\\\0 {   
-  cool_yylval.error_msg="String contains null character";   
-  return ERROR;   
-  BEGIN INITIAL; 
-}  
-
 <STRING><<EOF>> {    
-  BEGIN INITIAL;    
-  cool_yylval.error_msg="EOF in string constant";    
+  BEGIN 0;    
+  yylval.error_msg="EOF in string constant";    
   return ERROR; 
 }  
 
 <STRING>\n {   
-  BEGIN INITIAL;   
+  BEGIN 0;   
+  curr_lineno++;
   cool_yylval.error_msg="Unterminated string constant";    
   return ERROR; 
 }   
+
+<STRING_ERROR>\" {
+  yylval.error_msg= "String contains null character";
+  BEGIN 0;
+  return ERROR;
+}
 
 %%
 
