@@ -111,7 +111,7 @@ WHITESPACE [ \t\r\f\v]+
 }  
 
 {STARPAREN} {   
-  yylval.error_msg="Unmatched *)";   
+  cool_yylval.error_msg="Unmatched *)";   
   return ERROR; 
 }  
 
@@ -122,7 +122,7 @@ WHITESPACE [ \t\r\f\v]+
 <COMMENT>\n { curr_lineno++; }
 
 <COMMENT><<EOF>> {   
-  yylval.error_msg="EOF in comment";  
+  cool_yylval.error_msg="EOF in comment";  
   BEGIN 0;
   return ERROR; 
 }  
@@ -252,7 +252,7 @@ WHITESPACE [ \t\r\f\v]+
 
 <STRING><<EOF>> {    
   BEGIN 0;    
-  yylval.error_msg="EOF in string constant";    
+  cool_yylval.error_msg="EOF in string constant";    
   return ERROR; 
 }  
 
@@ -264,7 +264,7 @@ WHITESPACE [ \t\r\f\v]+
 }   
 
 <STRING_ERROR>\" {
-  yylval.error_msg= "String contains null character";
+  cool_yylval.error_msg= "String contains null character";
   BEGIN 0;
   return ERROR;
 }
