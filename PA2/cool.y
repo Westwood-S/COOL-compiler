@@ -146,12 +146,13 @@ documentation for details). */
 %left ASSIGN     
 %left '+' '-'   
 %left '*' '/'  
-%left '@'  
-%left '.'    
-%nonassoc NOT    
+%left '.'
+%left '@'     
+%nonassoc '~'
+%nonassoc ISVOID  
 %nonassoc LE '<' '=' 
-%nonassoc ISVOID    
-%nonassoc '~'      
+%nonassoc NOT    
+      
 
 %%    
 
@@ -248,11 +249,11 @@ expr_let:
 OBJECTID ':' TYPEID IN expr     
 { $$ = let($1, $3, no_expr(), $5); }    
 | OBJECTID ':' TYPEID ASSIGN expr IN expr   
-{ $$ let($1, $3, $5, $7); }   
+{ $$ = let($1, $3, $5, $7); }   
 | OBJECTID ':' TYPEID IN expr ',' expr_let 
 { $$ = let($1, $3, no_expr(), $5); }   
 | OBJECTID ':' TYPEID ASSIGN expr ',' expr_let   
-{ $$ let($1, $3, $5, $7); }    
+{ $$ = let($1, $3, $5, $7); }    
 | error ',' expr_let { $$ = $3; }     ;    
 
 case_list:    
