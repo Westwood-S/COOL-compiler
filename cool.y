@@ -31,7 +31,7 @@ node_lineno = Current;
 /* IMPORTANT NOTE ON LINE NUMBERS     
 *********************************     
 * The above definitions and macros cause every terminal in your grammar to      
-* have the line number supplied by the lexer. The only task you have to     
+* have the line number supplied by  the lexer. The only task you have to     
 * implement for line numbers to work correctly, is to use SET_NODELOC()     
 * before constructing any constructs from non-terminals in your grammar.     
 * Example: Consider you are matching on the following very restrictive      
